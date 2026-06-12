@@ -375,6 +375,28 @@
     font-family: inherit;
   }
   .csv-btn:hover { background: var(--accent-light); }
+  .seg {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .seg button {
+    background: #fff;
+    border: none;
+    padding: 4px 14px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button.active {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
   .empty {
     text-align: center;
     color: var(--muted);
@@ -420,7 +442,13 @@
   </div>
 
   <div class="card">
-    <h2>サイト別の収入</h2>
+    <div class="card-head">
+      <h2>サイト別の収入</h2>
+      <div class="seg" id="breakdown-mode">
+        <button type="button" data-mode="month" class="active">月ごと</button>
+        <button type="button" data-mode="year">年ごと</button>
+      </div>
+    </div>
     <div class="month-nav">
       <button type="button" id="prev-month">◀ 前月</button>
       <span class="title" id="view-month-label"></span>
@@ -469,7 +497,13 @@
   </div>
 
   <div class="card">
-    <h2>月別の収入(直近6ヶ月)</h2>
+    <div class="card-head">
+      <h2 id="chart-title">月別の収入(直近6ヶ月)</h2>
+      <div class="seg" id="chart-mode">
+        <button type="button" data-mode="month" class="active">月ごと</button>
+        <button type="button" data-mode="year">年ごと</button>
+      </div>
+    </div>
     <div class="chart" id="chart"></div>
   </div>
 
@@ -529,6 +563,9 @@ function monthTotal(key) {
 }
 
 let viewMonth = monthKey(todayStr());
+let viewYear = todayStr().slice(0, 4);
+let breakdownMode = 'month'; // 'month' | 'year'
+let chartMode = 'month';
 
 function renderSummary() {
   const thisMonth = monthKey(todayStr());
@@ -546,14 +583,23 @@ function renderSummary() {
 function renderClientBreakdown() {
   const container = document.getElementById('client-breakdown');
   container.innerHTML = '';
-  document.getElementById('view-month-label').textContent = monthLabel(viewMonth);
-  document.getElementById('next-month').disabled = viewMonth >= monthKey(todayStr());
+  const isYear = breakdownMode === 'year';
+  const thisMonth = monthKey(todayStr());
+  document.getElementById('view-month-label').textContent =
+    isYear ? `${Number(viewYear)}年` : monthLabel(viewMonth);
+  document.getElementById('prev-month').textContent = isYear ? '◀ 前年' : '◀ 前月';
+  document.getElementById('next-month').textContent = isYear ? '翌年 ▶' : '翌月 ▶';
+  document.getElementById('next-month').disabled =
+    isYear ? viewYear >= thisMonth.slice(0, 4) : viewMonth >= thisMonth;
+  const inRange = isYear
+    ? (d => d.startsWith(viewYear + '-'))
+    : (d => monthKey(d) === viewMonth);
 
-  // 登録済みサイト + その月に記録のあるサイト(登録外も含む)
+  // 登録済みサイト + 期間内に記録のあるサイト(登録外も含む)
   const totals = new Map();
   for (const c of clients) totals.set(c, 0);
   for (const r of records) {
-    if (monthKey(r.date) === viewMonth) {
+    if (inRange(r.date)) {
       totals.set(r.client, (totals.get(r.client) || 0) + r.amount);
     }
   }
@@ -601,7 +647,7 @@ function renderClientBreakdown() {
   label.textContent = '合計';
   const amt = document.createElement('span');
   amt.className = 'amt';
-  amt.textContent = yen.format(monthTotal(viewMonth));
+  amt.textContent = yen.format(entries.reduce((s, [, v]) => s + v, 0));
   totalRow.append(label, amt);
   container.appendChild(totalRow);
 }
@@ -658,22 +704,39 @@ function addClient(name) {
   return name;
 }
 
+function yearTotal(year) {
+  return records
+    .filter(r => r.date.startsWith(year + '-'))
+    .reduce((sum, r) => sum + r.amount, 0);
+}
 function renderChart() {
   const chart = document.getElementById('chart');
   chart.innerHTML = '';
+  const isYear = chartMode === 'year';
+  document.getElementById('chart-title').textContent =
+    isYear ? '年別の収入(直近6年)' : '月別の収入(直近6ヶ月)';
   const thisMonth = monthKey(todayStr());
+  const thisYear = thisMonth.slice(0, 4);
+  const current = isYear ? thisYear : thisMonth;
   const keys = [];
-  for (let i = 5; i >= 0; i--) keys.push(shiftMonth(thisMonth, -i));
-  const totals = keys.map(monthTotal);
+  for (let i = 5; i >= 0; i--) {
+    keys.push(isYear ? String(Number(thisYear) - i) : shiftMonth(thisMonth, -i));
+  }
+  const totals = keys.map(k => (isYear ? yearTotal(k) : monthTotal(k)));
   const max = Math.max(...totals, 1);
 
   keys.forEach((key, i) => {
     const col = document.createElement('div');
-    col.className = 'col' + (key === thisMonth ? ' current' : '');
+    col.className = 'col' + (key === current ? ' current' : '');
 
     const amount = document.createElement('div');
     amount.className = 'bar-amount';
-    amount.textContent = totals[i] > 0 ? totals[i].toLocaleString('ja-JP') : '';
+    // 年別で100万以上は「123万」表記(隣のラベルと重ならないように)
+    amount.textContent = totals[i] > 0
+      ? (isYear && totals[i] >= 1000000
+          ? Math.round(totals[i] / 10000).toLocaleString('ja-JP') + '万'
+          : totals[i].toLocaleString('ja-JP'))
+      : '';
 
     const bar = document.createElement('div');
     bar.className = 'bar';
@@ -681,7 +744,7 @@ function renderChart() {
 
     const label = document.createElement('div');
     label.className = 'month-label';
-    label.textContent = `${Number(key.slice(5))}月`;
+    label.textContent = isYear ? `${Number(key)}年` : `${Number(key.slice(5))}月`;
 
     col.append(amount, bar, label);
     chart.appendChild(col);
@@ -766,12 +829,39 @@ function render() {
 document.getElementById('client').addEventListener('change', toggleNewClientInput);
 
 document.getElementById('prev-month').addEventListener('click', () => {
-  viewMonth = shiftMonth(viewMonth, -1);
+  if (breakdownMode === 'year') viewYear = String(Number(viewYear) - 1);
+  else viewMonth = shiftMonth(viewMonth, -1);
   renderClientBreakdown();
 });
 document.getElementById('next-month').addEventListener('click', () => {
-  viewMonth = shiftMonth(viewMonth, 1);
+  if (breakdownMode === 'year') viewYear = String(Number(viewYear) + 1);
+  else viewMonth = shiftMonth(viewMonth, 1);
   renderClientBreakdown();
+});
+
+function setupSeg(segId, onChange) {
+  const seg = document.getElementById(segId);
+  seg.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      onChange(btn.dataset.mode);
+    });
+  });
+}
+setupSeg('breakdown-mode', (mode) => {
+  breakdownMode = mode;
+  const thisMonth = monthKey(todayStr());
+  if (mode === 'year') {
+    viewYear = viewMonth.slice(0, 4);
+  } else {
+    // 年表示で見ていた年に合わせて月へ戻る(過去の年なら12月、今年なら今月)
+    viewMonth = viewYear === thisMonth.slice(0, 4) ? thisMonth : `${viewYear}-12`;
+  }
+  renderClientBreakdown();
+});
+setupSeg('chart-mode', (mode) => {
+  chartMode = mode;
+  renderChart();
 });
 
 document.getElementById('manage-add-btn').addEventListener('click', () => {
