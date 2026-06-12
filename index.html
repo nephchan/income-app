@@ -76,7 +76,7 @@
   .summary .item.main { background: var(--green-light); border-color: #c6f6d5; }
   .summary .item.main .value { color: var(--green); }
 
-  /* 取引先別 */
+  /* サイト別 */
   .month-nav {
     display: flex;
     justify-content: space-between;
@@ -190,7 +190,7 @@
   }
   button.add:hover { background: #2c5282; }
 
-  /* 取引先の管理 */
+  /* サイトの管理 */
   details.manage { margin-top: 14px; }
   details.manage summary {
     font-size: 12px;
@@ -355,7 +355,16 @@
   @media (max-width: 480px) {
     .summary { grid-template-columns: 1fr 1fr; }
     .summary .item.main { grid-column: 1 / -1; }
-    .record .memo { display: none; }
+    .record { flex-wrap: wrap; }
+    .record .amount { margin-left: auto; }
+    .record .memo {
+      flex: none;
+      flex-basis: 100%;
+      order: 5;
+      margin: 1px 0 0 calc(3.5em + 10px);
+      font-size: 12px;
+    }
+    .record .memo:empty { display: none; }
     .client-row .name { width: 6em; }
     .client-row .amt { width: 6.5em; }
   }
@@ -381,7 +390,7 @@
   </div>
 
   <div class="card">
-    <h2>取引先別の収入</h2>
+    <h2>サイト別の収入</h2>
     <div class="month-nav">
       <button type="button" id="prev-month">◀ 前月</button>
       <span class="title" id="view-month-label"></span>
@@ -405,27 +414,27 @@
       </div>
       <div class="row">
         <div>
-          <label for="client">取引先</label>
+          <label for="client">サイト</label>
           <select id="client"></select>
           <div id="new-client-wrap" class="hidden">
-            <input type="text" id="new-client" placeholder="新しい取引先名">
+            <input type="text" id="new-client" placeholder="新しいサイト名">
           </div>
         </div>
         <div>
-          <label for="memo">メモ(任意)</label>
-          <input type="text" id="memo" placeholder="例: 6月分請求">
+          <label for="memo">顧客名</label>
+          <input type="text" id="memo" placeholder="例: 山田太郎">
         </div>
       </div>
       <button type="submit" class="add">追加する</button>
     </form>
     <details class="manage">
-      <summary>取引先の管理</summary>
+      <summary>サイトの管理</summary>
       <div class="manage-add">
-        <input type="text" id="manage-input" placeholder="取引先名(例: A社)">
+        <input type="text" id="manage-input" placeholder="サイト名(例: BASE)">
         <button type="button" id="manage-add-btn">登録</button>
       </div>
       <div class="chip-list" id="chip-list"></div>
-      <div class="manage-note">※ 取引先を削除しても、記録済みの収入は消えません。</div>
+      <div class="manage-note">※ サイトを削除しても、記録済みの収入は消えません。</div>
     </details>
   </div>
 
@@ -505,7 +514,7 @@ function renderClientBreakdown() {
   document.getElementById('view-month-label').textContent = monthLabel(viewMonth);
   document.getElementById('next-month').disabled = viewMonth >= monthKey(todayStr());
 
-  // 登録済み取引先 + その月に記録のある取引先(登録外も含む)
+  // 登録済みサイト + その月に記録のあるサイト(登録外も含む)
   const totals = new Map();
   for (const c of clients) totals.set(c, 0);
   for (const r of records) {
@@ -517,7 +526,7 @@ function renderClientBreakdown() {
   if (totals.size === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = '「取引先の管理」から毎月の取引先を登録すると、ここに内訳が表示されます。';
+    empty.textContent = '「サイトの管理」から毎月のサイトを登録すると、ここに内訳が表示されます。';
     container.appendChild(empty);
     return;
   }
@@ -545,7 +554,7 @@ function renderClientBreakdown() {
 
     const amt = document.createElement('span');
     amt.className = 'amt';
-    amt.textContent = total > 0 ? yen.format(total) : '未入金';
+    amt.textContent = total > 0 ? yen.format(total) : '売上なし';
 
     row.append(nameEl, track, amt);
     container.appendChild(row);
@@ -566,7 +575,7 @@ function renderClientOptions(selected) {
   const sel = document.getElementById('client');
   sel.innerHTML = '';
   for (const c of clients) sel.append(new Option(c, c));
-  sel.append(new Option('＋ 新しい取引先を追加', '__add__'));
+  sel.append(new Option('＋ 新しいサイトを追加', '__add__'));
   if (selected && (clients.includes(selected) || selected === '__add__')) {
     sel.value = selected;
   } else if (clients.length === 0) {
@@ -689,7 +698,7 @@ function renderList() {
 
     const memo = document.createElement('span');
     memo.className = 'memo';
-    memo.textContent = r.memo;
+    memo.textContent = r.memo ? '👤 ' + r.memo : '';
 
     const amount = document.createElement('span');
     amount.className = 'amount';
@@ -784,7 +793,7 @@ function csvField(v) {
 }
 function buildCsv() {
   const sorted = [...records].sort((a, b) => (a.date < b.date ? -1 : 1));
-  const lines = ['日付,取引先,金額,メモ'];
+  const lines = ['日付,サイト,金額,顧客名'];
   for (const r of sorted) {
     lines.push([r.date, csvField(r.client), r.amount, csvField(r.memo)].join(','));
   }
