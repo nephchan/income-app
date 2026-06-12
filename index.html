@@ -330,9 +330,39 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 12px;
   }
   .card-head h2 { margin-bottom: 0; }
+  .head-actions { display: flex; gap: 8px; }
+  .import-preview {
+    border: 1px solid var(--accent);
+    background: var(--accent-light);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .imp-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+  .imp-sub { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .imp-list {
+    background: #fff;
+    border-radius: 8px;
+    padding: 6px 10px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .imp-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 13px;
+    padding: 3px 0;
+  }
+  .imp-row span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .imp-note { font-size: 12px; color: var(--muted); margin: 10px 0; }
+  .imp-err { font-size: 13px; color: var(--danger); font-weight: 600; margin-bottom: 10px; }
+  .imp-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; }
   .csv-btn {
     background: #fff;
     border: 1px solid var(--border);
@@ -446,8 +476,13 @@
   <div class="card">
     <div class="card-head">
       <h2>履歴</h2>
-      <button type="button" id="export-csv" class="csv-btn">CSV書き出し</button>
+      <div class="head-actions">
+        <button type="button" id="import-csv" class="csv-btn">CSV取り込み</button>
+        <button type="button" id="export-csv" class="csv-btn">CSV書き出し</button>
+      </div>
     </div>
+    <input type="file" id="import-file" accept=".csv,text/csv" hidden>
+    <div id="import-preview" class="import-preview hidden"></div>
     <div id="list"></div>
   </div>
 </div>
@@ -800,6 +835,151 @@ function buildCsv() {
   // 先頭のBOMはExcelで文字化けさせないため
   return '\ufeff' + lines.join('\r\n');
 }
+// ===== CSV取り込み(らくらく家計簿などの「収入」行を取り込む) =====
+// 文字コードを自動判定(UTF-8でダメならShift_JIS)
+function decodeBuffer(buf) {
+  const bytes = new Uint8Array(buf);
+  if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    try { return new TextDecoder('shift_jis').decode(bytes); }
+    catch { return new TextDecoder('utf-8').decode(bytes); }
+  }
+}
+// 引用符・カンマ・改行に対応したCSVパーサ
+function parseCsv(text) {
+  text = text.replace(/^\ufeff/, '');
+  const rows = [];
+  let row = [], field = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') { q = true; }
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (c !== '\r') { field += c; }
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+function parseAmount(s) {
+  return Number(String(s == null ? '' : s).replace(/[,，¥￥\s]/g, ''));
+}
+function normalizeDate(s) {
+  const m = String(s).trim().match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : null;
+}
+function buildImport(text) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) return { error: 'データが見つかりませんでした。' };
+  const header = rows[0].map(h => h.trim());
+  const find = names => header.findIndex(h => names.includes(h));
+  const di = find(['日付', 'date']);
+  const si = find(['費目', '項目', 'カテゴリ', 'サイト', '取引先']);
+  const ci = find(['内容', 'メモ', '顧客名']);
+  const ii = find(['収入', '入金', '金額']);
+  const ei = find(['支出', '出金']);
+  if (di < 0 || si < 0 || ii < 0) {
+    return { error: '「日付」「費目」「収入」の列が見つかりませんでした。' };
+  }
+  const toAdd = [];
+  let expenseCount = 0, skipped = 0;
+  for (let r = 1; r < rows.length; r++) {
+    const cols = rows[r];
+    const income = parseAmount(cols[ii]);
+    if (!(income > 0)) {
+      if (ei >= 0 && parseAmount(cols[ei]) > 0) expenseCount++; else skipped++;
+      continue;
+    }
+    const date = normalizeDate(cols[di]);
+    const site = (cols[si] || '').trim();
+    if (!date || !site) { skipped++; continue; }
+    toAdd.push({ date, amount: Math.round(income), client: site, memo: ci >= 0 ? (cols[ci] || '').trim() : '' });
+  }
+  const existKey = new Set(records.map(r => `${r.date}|${r.client}|${r.amount}`));
+  const fresh = [], dupes = [];
+  for (const rec of toAdd) {
+    (existKey.has(`${rec.date}|${rec.client}|${rec.amount}`) ? dupes : fresh).push(rec);
+  }
+  const perSite = new Map();
+  for (const rec of fresh) perSite.set(rec.client, (perSite.get(rec.client) || 0) + rec.amount);
+  const dates = fresh.map(r => r.date).sort();
+  return {
+    fresh, expenseCount, skipped, dupes,
+    perSite: [...perSite.entries()].sort((a, b) => b[1] - a[1]),
+    total: fresh.reduce((s, r) => s + r.amount, 0),
+    from: dates[0], to: dates[dates.length - 1],
+  };
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+let pendingImport = null;
+function showImportPreview(result) {
+  const panel = document.getElementById('import-preview');
+  panel.classList.remove('hidden');
+  panel.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (result.error) {
+    panel.innerHTML = `<div class="imp-err">取り込めませんでした:${escapeHtml(result.error)}</div>` +
+      `<div class="imp-actions"><button type="button" id="imp-cancel" class="csv-btn">閉じる</button></div>`;
+    document.getElementById('imp-cancel').onclick = () => panel.classList.add('hidden');
+    return;
+  }
+  pendingImport = result.fresh;
+  const list = result.perSite.map(([name, amt]) =>
+    `<div class="imp-row"><span>${escapeHtml(name)}</span><span>${yen.format(amt)}</span></div>`).join('') ||
+    '<div class="imp-row"><span>取り込める収入がありません</span><span></span></div>';
+  panel.innerHTML = `
+    <div class="imp-title">取り込み内容の確認</div>
+    <div class="imp-sub">${result.fresh.length}件 ・ ${result.from || '-'}〜${result.to || '-'} ・ 合計 ${yen.format(result.total)}</div>
+    <div class="imp-list">${list}</div>
+    <div class="imp-note">支出の行 ${result.expenseCount}件は取り込みません(収入のみ取り込みます)。${result.dupes.length ? `すでに登録済みの ${result.dupes.length}件はスキップします。` : ''}</div>
+    <div class="imp-actions">
+      <button type="button" id="imp-cancel" class="csv-btn">キャンセル</button>
+      <button type="button" id="imp-confirm" class="add" style="width:auto;padding:9px 18px;">取り込む</button>
+    </div>`;
+  document.getElementById('imp-cancel').onclick = () => { panel.classList.add('hidden'); pendingImport = null; };
+  document.getElementById('imp-confirm').onclick = doImport;
+}
+function doImport() {
+  if (!pendingImport || !pendingImport.length) return;
+  const newSites = [];
+  for (const rec of pendingImport) {
+    records.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      date: rec.date, amount: rec.amount, client: rec.client, memo: rec.memo, createdAt: Date.now(),
+    });
+    if (!clients.includes(rec.client) && !newSites.includes(rec.client)) newSites.push(rec.client);
+  }
+  clients.push(...newSites);
+  saveRecords();
+  saveClients();
+  const n = pendingImport.length;
+  pendingImport = null;
+  document.getElementById('import-preview').classList.add('hidden');
+  renderClientOptions();
+  renderChips();
+  render();
+  alert(`${n}件を取り込みました。`);
+}
+document.getElementById('import-csv').addEventListener('click', () => {
+  document.getElementById('import-file').click();
+});
+document.getElementById('import-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => showImportPreview(buildImport(decodeBuffer(reader.result)));
+  reader.onerror = () => alert('ファイルの読み込みに失敗しました。');
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+});
+
 document.getElementById('export-csv').addEventListener('click', () => {
   const blob = new Blob([buildCsv()], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
