@@ -509,7 +509,7 @@
 
   <div class="card">
     <div class="card-head">
-      <h2>履歴</h2>
+      <h2>履歴 <span id="list-period"></span></h2>
       <div class="head-actions">
         <button type="button" id="import-csv" class="csv-btn">CSV取り込み</button>
         <button type="button" id="export-csv" class="csv-btn">CSV書き出し</button>
@@ -755,15 +755,26 @@ function renderList() {
   const list = document.getElementById('list');
   list.innerHTML = '';
 
-  if (records.length === 0) {
+  // 「サイト別の収入」で選んでいる月/年と連動して絞り込む
+  const isYear = breakdownMode === 'year';
+  document.getElementById('list-period').textContent =
+    isYear ? `(${Number(viewYear)}年)` : `(${monthLabel(viewMonth)})`;
+  const inRange = isYear
+    ? (d => d.startsWith(viewYear + '-'))
+    : (d => monthKey(d) === viewMonth);
+  const shown = records.filter(r => inRange(r.date));
+
+  if (shown.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'まだ記録がありません。上のフォームから追加してください。';
+    empty.textContent = records.length === 0
+      ? 'まだ記録がありません。上のフォームから追加してください。'
+      : 'この期間の記録はありません。「サイト別の収入」の ◀ ▶ や「月ごと/年ごと」で期間を切り替えられます。';
     list.appendChild(empty);
     return;
   }
 
-  const sorted = [...records].sort((a, b) =>
+  const sorted = [...shown].sort((a, b) =>
     a.date === b.date ? b.createdAt - a.createdAt : (a.date < b.date ? 1 : -1)
   );
 
@@ -832,11 +843,13 @@ document.getElementById('prev-month').addEventListener('click', () => {
   if (breakdownMode === 'year') viewYear = String(Number(viewYear) - 1);
   else viewMonth = shiftMonth(viewMonth, -1);
   renderClientBreakdown();
+  renderList();
 });
 document.getElementById('next-month').addEventListener('click', () => {
   if (breakdownMode === 'year') viewYear = String(Number(viewYear) + 1);
   else viewMonth = shiftMonth(viewMonth, 1);
   renderClientBreakdown();
+  renderList();
 });
 
 function setupSeg(segId, onChange) {
@@ -858,6 +871,7 @@ setupSeg('breakdown-mode', (mode) => {
     viewMonth = viewYear === thisMonth.slice(0, 4) ? thisMonth : `${viewYear}-12`;
   }
   renderClientBreakdown();
+  renderList();
 });
 setupSeg('chart-mode', (mode) => {
   chartMode = mode;
@@ -904,6 +918,10 @@ document.getElementById('form').addEventListener('submit', (e) => {
     createdAt: Date.now(),
   });
   saveRecords();
+
+  // 追加した記録の月/年に表示を合わせる(記録がすぐ見えるように)
+  viewMonth = monthKey(date);
+  viewYear = date.slice(0, 4);
 
   document.getElementById('amount').value = '';
   document.getElementById('memo').value = '';
