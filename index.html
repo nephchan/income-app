@@ -1105,6 +1105,28 @@ renderClientOptions();
 renderChips();
 render();
 
+// 同一オリジンの別アプリ(ネイルオーダー管理)から収入記録が追加/変更されたら自動で反映
+function reloadFromStorage() {
+  records = loadJson(STORAGE_KEY).map(r => r.client ? r : { ...r, client: r.category || 'その他' });
+  clients = loadJson(CLIENTS_KEY);
+}
+window.addEventListener('storage', (e) => {
+  if (e.key === STORAGE_KEY || e.key === CLIENTS_KEY || e.key === null) {
+    reloadFromStorage();
+    renderClientOptions();
+    renderChips();
+    render();
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    reloadFromStorage();
+    renderClientOptions();
+    renderChips();
+    render();
+  }
+});
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
