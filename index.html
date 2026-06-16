@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>収入記録</title>
+<title>収入・オーダー管理</title>
 <meta name="theme-color" content="#2b6cb0">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -57,6 +57,34 @@
     margin-bottom: 12px;
   }
   .hidden { display: none !important; }
+
+  /* タブ(収入 / オーダー) */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    padding: 12px 0;
+    margin-bottom: 8px;
+  }
+  .tabs button {
+    flex: 1;
+    padding: 11px;
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: inherit;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tabs button[data-tab="orders"].active { background: #d6457f; border-color: #d6457f; }
+  #tab-orders { margin: 0 -16px; }
+  #orders-frame { width: 100%; border: 0; display: block; }
 
   /* サマリー */
   .summary {
@@ -424,6 +452,11 @@
 </head>
 <body>
 <div class="container">
+  <div class="tabs">
+    <button type="button" data-tab="income" class="active">💰 収入</button>
+    <button type="button" data-tab="orders">💅 オーダー</button>
+  </div>
+  <div id="tab-income">
   <h1>💰 収入記録</h1>
 
   <div class="summary">
@@ -518,6 +551,11 @@
     <input type="file" id="import-file" accept=".csv,text/csv" hidden>
     <div id="import-preview" class="import-preview hidden"></div>
     <div id="list"></div>
+  </div>
+  </div><!-- /#tab-income -->
+
+  <div id="tab-orders" class="hidden">
+    <iframe id="orders-frame" title="ネイルオーダー管理" scrolling="no"></iframe>
   </div>
 </div>
 
@@ -1126,6 +1164,43 @@ document.addEventListener('visibilitychange', () => {
     render();
   }
 });
+
+// ===== タブ切り替え(収入 / ネイルオーダー) =====
+const _tabIncome = document.getElementById('tab-income');
+const _tabOrders = document.getElementById('tab-orders');
+const _ordersFrame = document.getElementById('orders-frame');
+let _frameLoaded = false;
+function _resizeOrdersFrame() {
+  try {
+    _ordersFrame.style.height = _ordersFrame.contentWindow.document.documentElement.scrollHeight + 'px';
+  } catch (e) {}
+}
+function showTab(name) {
+  const orders = name === 'orders';
+  _tabIncome.classList.toggle('hidden', orders);
+  _tabOrders.classList.toggle('hidden', !orders);
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  try { localStorage.setItem('active-tab', name); } catch (e) {}
+  if (orders) {
+    if (!_frameLoaded) { _ordersFrame.src = 'orders.html'; _frameLoaded = true; }
+    else { _resizeOrdersFrame(); }
+  } else {
+    // 収入タブに戻ったら、ネイルからの売上を反映して再描画
+    reloadFromStorage();
+    renderClientOptions();
+    renderChips();
+    render();
+  }
+  window.scrollTo(0, 0);
+}
+_ordersFrame.addEventListener('load', () => {
+  _resizeOrdersFrame();
+  try {
+    new ResizeObserver(() => _resizeOrdersFrame()).observe(_ordersFrame.contentWindow.document.documentElement);
+  } catch (e) {}
+});
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+showTab((() => { try { return localStorage.getItem('active-tab') || 'income'; } catch (e) { return 'income'; } })());
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});

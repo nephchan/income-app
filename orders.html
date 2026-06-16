@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ネイルオーダー管理</title>
+<meta name="theme-color" content="#d6457f">
+<style>
+  :root {
+    --bg: #faf6f8;
+    --card: #ffffff;
+    --text: #2d2230;
+    --muted: #9b8a96;
+    --border: #efe2ea;
+    --accent: #d6457f;
+    --accent-dark: #b83368;
+    --accent-light: #fdeef4;
+    --green: #2f855a;
+    --green-light: #f0fff4;
+    --teal: #2c7a7b;
+    --teal-light: #e6fffa;
+    --violet: #6b46c1;
+    --violet-light: #efe9fb;
+    --amber: #b7791f;
+    --amber-light: #fffaf0;
+    --danger: #c53030;
+    --danger-light: #fff5f5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .container { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 14px; color: var(--muted); font-weight: 600; margin-bottom: 12px; }
+  .hidden { display: none !important; }
+
+  /* サマリー */
+  .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .summary .item { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 12px; text-align: center; }
+  .summary .label { font-size: 12px; color: var(--muted); }
+  .summary .value { font-size: 24px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .summary .value small { font-size: 13px; font-weight: 600; }
+  .summary .item.main { background: var(--accent-light); border-color: #f7cfe0; }
+  .summary .item.main .value { color: var(--accent-dark); }
+  .summary .item.warn.active { background: var(--amber-light); border-color: #f6e0b3; }
+  .summary .item.warn.active .value { color: var(--amber); }
+
+  /* フォーム */
+  form .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  form .field { margin-bottom: 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input, select, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 16px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text);
+  }
+  textarea { resize: vertical; min-height: 60px; line-height: 1.5; }
+  input:focus, select:focus, textarea:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+    border-color: var(--accent);
+  }
+  .hint { font-size: 12px; color: var(--accent-dark); margin-top: 5px; font-weight: 600; min-height: 1.2em; }
+  .sub-label { font-size: 11px; color: var(--muted); font-weight: 400; }
+  #new-channel-wrap { margin-top: 8px; }
+  button.add {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  button.add:hover { background: var(--accent-dark); }
+  .form-actions { display: flex; gap: 10px; }
+  .form-actions .add { flex: 1; }
+  button.cancel {
+    padding: 12px 18px;
+    background: #fff;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  button.cancel:hover { background: #faf6f8; }
+  .editing-banner {
+    background: var(--accent-light);
+    color: var(--accent-dark);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  /* 経由先の管理 */
+  details.manage { margin-top: 14px; }
+  details.manage summary { font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
+  .manage-add { display: flex; gap: 8px; margin-top: 10px; }
+  .manage-add input { flex: 1; font-size: 14px; padding: 8px 10px; }
+  .manage-add button {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 0 14px; cursor: pointer; font-family: inherit; font-size: 13px;
+    color: var(--accent); font-weight: 600; white-space: nowrap;
+  }
+  .manage-add button:hover { background: var(--accent-light); }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 2px;
+    background: var(--accent-light); color: var(--accent-dark);
+    border-radius: 999px; padding: 3px 6px 3px 12px; font-size: 13px;
+  }
+  .chip button { background: none; border: none; cursor: pointer; color: inherit; font-size: 12px; padding: 2px 5px; border-radius: 999px; line-height: 1; }
+  .chip button:hover { color: var(--danger); }
+  .manage-note { font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+  /* 一覧の操作 */
+  .card-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .card-head h2 { margin-bottom: 0; }
+  .head-actions { display: flex; gap: 8px; }
+  .csv-btn {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 12px; font-size: 12px; color: var(--accent); font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  .csv-btn:hover { background: var(--accent-light); }
+  .toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+  .toolbar input.search { font-size: 14px; padding: 9px 12px; }
+  .filter-row { display: flex; gap: 8px; align-items: center; }
+  .filter-row select { font-size: 13px; padding: 7px 10px; flex: 1; }
+
+  /* 注文カード */
+  .order { border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; background: #fff; }
+  .order.urgent { border-color: #f6d9a8; background: var(--amber-light); }
+  .order.overdue { border-color: #f8c0c0; background: var(--danger-light); }
+  .order.done { opacity: 0.72; }
+  .order-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .order .cust { font-weight: 700; font-size: 16px; }
+  .repeat { font-size: 11px; color: var(--accent-dark); background: var(--accent-light); padding: 2px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+  .repeat.first { color: var(--violet); background: var(--violet-light); }
+  .status { font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+  .status.s0 { background: #f0eef1; color: #6b5b66; }
+  .status.s1 { background: var(--violet-light); color: var(--violet); }
+  .status.s2 { background: var(--teal-light); color: var(--teal); }
+  .status.s3 { background: var(--green-light); color: var(--green); }
+  .order-due { margin-left: auto; font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--muted); }
+  .order-due.warn { color: var(--amber); }
+  .order-due.over { color: var(--danger); }
+  .order-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .tag { font-size: 11px; color: var(--muted); background: #f5f0f3; padding: 2px 8px; border-radius: 999px; }
+  .tag.money { background: var(--green-light); color: var(--green); font-weight: 700; }
+  .tag.synced { background: var(--green-light); color: var(--green); }
+  .order-body { margin-top: 10px; font-size: 14px; }
+  .kv { display: flex; gap: 8px; padding: 2px 0; }
+  .kv .k { color: var(--muted); font-size: 12px; width: 4.5em; flex-shrink: 0; padding-top: 1px; }
+  .kv .v { flex: 1; white-space: pre-wrap; word-break: break-word; }
+  .order-dates { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .order-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .btn-sm {
+    border: 1px solid var(--border); background: #fff; border-radius: 8px;
+    padding: 6px 12px; font-size: 13px; font-family: inherit; cursor: pointer; color: var(--text);
+  }
+  .btn-sm:hover { background: #faf6f8; }
+  .btn-sm.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .btn-sm.primary:hover { background: var(--accent-dark); }
+  .btn-sm.del { color: var(--muted); margin-left: auto; }
+  .btn-sm.del:hover { color: var(--danger); background: var(--danger-light); border-color: #f8c0c0; }
+
+  .empty { text-align: center; color: var(--muted); padding: 28px 8px; font-size: 14px; }
+  .backup-note { font-size: 11px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+  .sync-note { font-size: 12px; color: var(--green); background: var(--green-light); border: 1px solid #c6f6d5; border-radius: 8px; padding: 8px 12px; margin-top: 12px; line-height: 1.5; }
+
+  @media (max-width: 480px) {
+    .summary .value { font-size: 20px; }
+    .order-due { margin-left: 0; flex-basis: 100%; order: 9; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>💅 ネイルオーダー管理</h1>
+
+  <div class="summary">
+    <div class="item main">
+      <div class="label">未発送</div>
+      <div class="value" id="sum-active">0<small>件</small></div>
+    </div>
+    <div class="item warn" id="sum-due-item">
+      <div class="label">締切7日以内</div>
+      <div class="value" id="sum-due">0<small>件</small></div>
+    </div>
+    <div class="item">
+      <div class="label">今月の納品</div>
+      <div class="value" id="sum-delivered">0<small>件</small></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 id="form-title">注文を追加</h2>
+    <div id="editing-banner" class="editing-banner hidden"></div>
+    <form id="form">
+      <div class="field">
+        <label for="name">お名前 <span class="sub-label">※必須</span></label>
+        <input type="text" id="name" list="names-list" placeholder="例: 山田 花子" autocomplete="off" required>
+        <datalist id="names-list"></datalist>
+        <div class="hint" id="repeat-hint"></div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="order-date">注文日</label>
+          <input type="date" id="order-date" required>
+        </div>
+        <div>
+          <label for="due-date">希望納期(締切)</label>
+          <input type="date" id="due-date">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="channel">経由</label>
+          <select id="channel"></select>
+          <div id="new-channel-wrap" class="hidden">
+            <input type="text" id="new-channel" placeholder="新しい経由先">
+          </div>
+        </div>
+        <div>
+          <label for="status">ステータス</label>
+          <select id="status"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="content">オーダー内容</label>
+        <textarea id="content" placeholder="デザイン・カラー・形・長さ など"></textarea>
+      </div>
+      <div class="field">
+        <label for="memo">その他メモ(重要事項)</label>
+        <textarea id="memo" placeholder="重要な連絡事項・備考など"></textarea>
+      </div>
+      <div class="row">
+        <div>
+          <label for="delivery-date">納品日 <span class="sub-label">(発送時)</span></label>
+          <input type="date" id="delivery-date">
+        </div>
+        <div>
+          <label for="price">料金(円) <span class="sub-label">(任意)</span></label>
+          <input type="number" id="price" min="0" step="1" inputmode="numeric" placeholder="例: 5000">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="add" id="submit-btn">追加する</button>
+        <button type="button" class="cancel hidden" id="cancel-edit">キャンセル</button>
+      </div>
+    </form>
+    <div class="sync-note">💰 料金を入れて「発送済み」にすると、<b>「収入」タブにも自動で記録</b>されます。</div>
+    <details class="manage">
+      <summary>経由先の管理</summary>
+      <div class="manage-add">
+        <input type="text" id="manage-input" placeholder="経由先(例: Instagram)">
+        <button type="button" id="manage-add-btn">登録</button>
+      </div>
+      <div class="chip-list" id="chip-list"></div>
+      <div class="manage-note">※ 経由先を削除しても、登録済みの注文は消えません。</div>
+    </details>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>注文一覧 <span id="list-count"></span></h2>
+      <div class="head-actions">
+        <button type="button" id="import-csv" class="csv-btn">取り込み</button>
+        <button type="button" id="export-csv" class="csv-btn">書き出し</button>
+      </div>
+    </div>
+    <input type="file" id="import-file" accept=".csv,text/csv" hidden>
+    <div class="toolbar">
+      <input type="search" id="search" class="search" placeholder="🔍 お名前で検索">
+      <div class="filter-row">
+        <select id="filter-status">
+          <option value="all">すべてのステータス</option>
+          <option value="active">未発送(未着手・制作中)</option>
+          <option value="未着手">未着手</option>
+          <option value="制作中">制作中</option>
+          <option value="発送済み">発送済み</option>
+          <option value="完了">完了</option>
+        </select>
+        <select id="sort-by">
+          <option value="due">締切が近い順</option>
+          <option value="order-new">注文日が新しい順</option>
+          <option value="order-old">注文日が古い順</option>
+        </select>
+      </div>
+    </div>
+    <div id="list"></div>
+    <div class="backup-note">
+      データはこの端末の中だけに保存されます(外部に送信されません)。機種変更やバックアップのときは「書き出し」でCSVを保存し、新しい端末で「取り込み」してください。
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'nail-orders';
+const CHANNELS_KEY = 'nail-channels';
+const STATUSES = ['未着手', '制作中', '発送済み', '完了'];
+const DEFAULT_CHANNELS = ['Instagram', 'minne', 'Creema', 'BASE', 'メルカリ', '直接依頼'];
+// 収入アプリと共有するキー(同じGitHubアカウントで公開し、同一端末で開いたときに連携できる)
+const INCOME_KEY = 'income-records';
+const INCOME_CLIENTS_KEY = 'income-clients';
+const yen = new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 });
+
+function loadJson(key, fallback) {
+  try {
+    const v = JSON.parse(localStorage.getItem(key));
+    return v == null ? fallback : v;
+  } catch { return fallback; }
+}
+function saveOrders() { localStorage.setItem(STORAGE_KEY, JSON.stringify(orders)); }
+function saveChannels() { localStorage.setItem(CHANNELS_KEY, JSON.stringify(channels)); }
+
+let orders = loadJson(STORAGE_KEY, []);
+let channels = loadJson(CHANNELS_KEY, null);
+if (channels == null) { channels = [...DEFAULT_CHANNELS]; saveChannels(); }
+
+let editingId = null;
+let filterStatus = 'all';
+let sortBy = 'due';
+let searchText = '';
+
+/* ===== 収入アプリ連携(同一オリジンのlocalStorageを共有) =====
+   料金があり「発送済み/完了」になった注文を、収入アプリの記録として自動で登録/更新する。
+   収入アプリ側のキー(income-records / income-clients)を読み書きするが、
+   触るのは src==='nail' で srcId が一致する記録だけ。手入力の収入記録には一切触れない。 */
+function shouldSyncIncome(o) {
+  return (o.status === '発送済み' || o.status === '完了') && Number(o.price) > 0;
+}
+function syncIncome(o) {
+  let recs;
+  try { recs = JSON.parse(localStorage.getItem(INCOME_KEY)) || []; } catch { recs = []; }
+  if (!Array.isArray(recs)) recs = [];
+  const i = recs.findIndex(r => r && r.src === 'nail' && r.srcId === o.id);
+  if (shouldSyncIncome(o)) {
+    const data = {
+      date: o.deliveryDate || o.orderDate || todayStr(),
+      amount: Math.round(Number(o.price)),
+      client: o.channel || 'ネイル',
+      memo: o.name || '',
+    };
+    if (i >= 0) recs[i] = { ...recs[i], ...data };
+    else recs.push({ id: 'nail_' + o.id, ...data, src: 'nail', srcId: o.id, createdAt: Date.now() });
+    localStorage.setItem(INCOME_KEY, JSON.stringify(recs));
+    // 経由先を収入アプリの「サイト」一覧にも追加(無ければ)
+    try {
+      let cl = JSON.parse(localStorage.getItem(INCOME_CLIENTS_KEY)) || [];
+      if (Array.isArray(cl) && data.client && !cl.includes(data.client)) {
+        cl.push(data.client);
+        localStorage.setItem(INCOME_CLIENTS_KEY, JSON.stringify(cl));
+      }
+    } catch {}
+  } else if (i >= 0) {
+    // 条件を外れた(差し戻し・料金ゼロなど)→ 連携した収入記録を削除
+    recs.splice(i, 1);
+    localStorage.setItem(INCOME_KEY, JSON.stringify(recs));
+  }
+}
+function removeIncomeForOrder(id) {
+  let recs;
+  try { recs = JSON.parse(localStorage.getItem(INCOME_KEY)) || []; } catch { return; }
+  if (!Array.isArray(recs)) return;
+  const next = recs.filter(r => !(r && r.src === 'nail' && r.srcId === id));
+  if (next.length !== recs.length) localStorage.setItem(INCOME_KEY, JSON.stringify(next));
+}
+
+/* ===== 日付ユーティリティ ===== */
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const a = new Date(todayStr() + 'T00:00:00');
+  const b = new Date(dateStr + 'T00:00:00');
+  return Math.round((b - a) / 86400000);
+}
+function fmtDate(s) {
+  if (!s) return '—';
+  return `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
+}
+function isActive(o) { return o.status === '未着手' || o.status === '制作中'; }
+
+/* ===== 何回目か(同じ名前の過去注文から自動算出) ===== */
+function ordinalMap() {
+  const byName = new Map();
+  for (const o of orders) {
+    const k = (o.name || '').trim();
+    if (!k) continue;
+    if (!byName.has(k)) byName.set(k, []);
+    byName.get(k).push(o);
+  }
+  const map = new Map();
+  for (const arr of byName.values()) {
+    arr.sort((a, b) =>
+      a.orderDate === b.orderDate ? a.createdAt - b.createdAt : (a.orderDate < b.orderDate ? -1 : 1));
+    arr.forEach((o, i) => map.set(o.id, i + 1));
+  }
+  return map;
+}
+
+/* ===== サマリー ===== */
+function renderSummary() {
+  const active = orders.filter(isActive);
+  const dueSoon = active.filter(o => o.dueDate && daysUntil(o.dueDate) <= 7);
+  const thisMonth = todayStr().slice(0, 7);
+  const delivered = orders.filter(o => o.deliveryDate && o.deliveryDate.slice(0, 7) === thisMonth);
+
+  document.getElementById('sum-active').innerHTML = active.length + '<small>件</small>';
+  document.getElementById('sum-due').innerHTML = dueSoon.length + '<small>件</small>';
+  document.getElementById('sum-delivered').innerHTML = delivered.length + '<small>件</small>';
+  document.getElementById('sum-due-item').classList.toggle('active', dueSoon.length > 0);
+}
+
+/* ===== 経由先 ===== */
+function renderChannelOptions(selected) {
+  const sel = document.getElementById('channel');
+  sel.innerHTML = '';
+  for (const c of channels) sel.append(new Option(c, c));
+  sel.append(new Option('＋ 新しい経由先を追加', '__add__'));
+  if (selected && (channels.includes(selected) || selected === '__add__')) sel.value = selected;
+  else if (channels.length === 0) sel.value = '__add__';
+  toggleNewChannelInput();
+}
+function toggleNewChannelInput() {
+  const isAdd = document.getElementById('channel').value === '__add__';
+  document.getElementById('new-channel-wrap').classList.toggle('hidden', !isAdd);
+}
+function renderChips() {
+  const list = document.getElementById('chip-list');
+  list.innerHTML = '';
+  for (const c of channels) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    const name = document.createElement('span');
+    name.textContent = c;
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = '✕';
+    del.title = `${c} を削除`;
+    del.addEventListener('click', () => {
+      channels = channels.filter(x => x !== c);
+      saveChannels();
+      renderChannelOptions();
+      renderChips();
+    });
+    chip.append(name, del);
+    list.appendChild(chip);
+  }
+}
+function addChannel(name) {
+  name = name.trim();
+  if (!name || channels.includes(name)) return name;
+  channels.push(name);
+  saveChannels();
+  renderChannelOptions(name);
+  renderChips();
+  return name;
+}
+
+/* ===== ステータス select ===== */
+function fillStatusSelect() {
+  const sel = document.getElementById('status');
+  sel.innerHTML = '';
+  for (const s of STATUSES) sel.append(new Option(s, s));
+}
+
+/* ===== お名前の候補(datalist) ===== */
+function renderNameList() {
+  const dl = document.getElementById('names-list');
+  dl.innerHTML = '';
+  const names = [...new Set(orders.map(o => (o.name || '').trim()).filter(Boolean))];
+  for (const n of names) dl.append(new Option(n));
+}
+
+/* ===== 何回目ヒント(入力中) ===== */
+function updateRepeatHint() {
+  const name = document.getElementById('name').value.trim();
+  const hint = document.getElementById('repeat-hint');
+  if (!name) { hint.textContent = ''; return; }
+  const past = orders.filter(o => o.id !== editingId && (o.name || '').trim() === name).length;
+  const nth = past + 1;
+  hint.textContent = past === 0 ? '✨ 初めてのお客様です' : `🔁 ${nth}回目のご注文(過去 ${past} 件)`;
+}
+
+/* ===== 一覧 ===== */
+function dueLabel(o) {
+  if (!o.dueDate) return { text: '', cls: '' };
+  const d = daysUntil(o.dueDate);
+  if (!isActive(o)) return { text: `納期 ${fmtDate(o.dueDate)}`, cls: '' };
+  if (d < 0) return { text: `${-d}日 超過`, cls: 'over' };
+  if (d === 0) return { text: '今日が締切', cls: 'over' };
+  if (d <= 3) return { text: `あと${d}日`, cls: 'warn' };
+  return { text: `あと${d}日`, cls: '' };
+}
+
+function renderList() {
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  const ord = ordinalMap();
+
+  let shown = orders.filter(o => {
+    if (searchText && !(o.name || '').toLowerCase().includes(searchText)) return false;
+    if (filterStatus === 'all') return true;
+    if (filterStatus === 'active') return isActive(o);
+    return o.status === filterStatus;
+  });
+
+  const statusRank = o => (o.status === '完了' ? 3 : o.status === '発送済み' ? 2 : 1);
+  const farFuture = '9999-99-99';
+  shown.sort((a, b) => {
+    if (sortBy === 'order-new') return a.orderDate === b.orderDate ? b.createdAt - a.createdAt : (a.orderDate < b.orderDate ? 1 : -1);
+    if (sortBy === 'order-old') return a.orderDate === b.orderDate ? a.createdAt - b.createdAt : (a.orderDate < b.orderDate ? -1 : 1);
+    // 締切が近い順:未完了を上に → 締切の早い順 → 注文日の新しい順
+    if (statusRank(a) !== statusRank(b)) return statusRank(a) - statusRank(b);
+    const da = a.dueDate || farFuture, db = b.dueDate || farFuture;
+    if (da !== db) return da < db ? -1 : 1;
+    return a.orderDate < b.orderDate ? 1 : -1;
+  });
+
+  document.getElementById('list-count').textContent = orders.length ? `(${shown.length}件)` : '';
+
+  if (shown.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = orders.length === 0
+      ? 'まだ注文がありません。上のフォームから追加してください。'
+      : '条件に合う注文がありません。検索や絞り込みを変えてみてください。';
+    list.appendChild(empty);
+    return;
+  }
+
+  for (const o of shown) {
+    const nth = ord.get(o.id) || 1;
+    const si = Math.max(0, STATUSES.indexOf(o.status));
+    const due = dueLabel(o);
+
+    const card = document.createElement('div');
+    card.className = 'order';
+    if (isActive(o) && o.dueDate) {
+      const d = daysUntil(o.dueDate);
+      if (d <= 0) card.classList.add('overdue');
+      else if (d <= 3) card.classList.add('urgent');
+    }
+    if (o.status === '完了') card.classList.add('done');
+
+    // ヘッダ行
+    const head = document.createElement('div');
+    head.className = 'order-head';
+    const cust = document.createElement('span');
+    cust.className = 'cust';
+    cust.textContent = o.name || '(名前なし)';
+    const rep = document.createElement('span');
+    rep.className = 'repeat' + (nth === 1 ? ' first' : '');
+    rep.textContent = nth === 1 ? '✨ 初回' : `🔁 ${nth}回目`;
+    const st = document.createElement('span');
+    st.className = 'status s' + si;
+    st.textContent = o.status;
+    head.append(cust, rep, st);
+    if (due.text) {
+      const dd = document.createElement('span');
+      dd.className = 'order-due ' + due.cls;
+      dd.textContent = due.text;
+      head.append(dd);
+    }
+    card.appendChild(head);
+
+    // 経由・料金・連携バッジ
+    const meta = document.createElement('div');
+    meta.className = 'order-meta';
+    if (o.channel) {
+      const t = document.createElement('span');
+      t.className = 'tag';
+      t.textContent = '経由: ' + o.channel;
+      meta.appendChild(t);
+    }
+    if (Number(o.price) > 0) {
+      const t = document.createElement('span');
+      t.className = 'tag money';
+      t.textContent = yen.format(o.price);
+      meta.appendChild(t);
+    }
+    if (shouldSyncIncome(o)) {
+      const t = document.createElement('span');
+      t.className = 'tag synced';
+      t.textContent = '💰 収入に登録済み';
+      meta.appendChild(t);
+    }
+    if (meta.children.length) card.appendChild(meta);
+
+    // 本文(内容・メモ)
+    const body = document.createElement('div');
+    body.className = 'order-body';
+    const addKV = (k, v) => {
+      if (!v) return;
+      const row = document.createElement('div');
+      row.className = 'kv';
+      const ke = document.createElement('span'); ke.className = 'k'; ke.textContent = k;
+      const ve = document.createElement('span'); ve.className = 'v'; ve.textContent = v;
+      row.append(ke, ve);
+      body.appendChild(row);
+    };
+    addKV('内容', o.content);
+    addKV('メモ', o.memo);
+    if (body.children.length) card.appendChild(body);
+
+    // 日付
+    const dates = document.createElement('div');
+    dates.className = 'order-dates';
+    dates.textContent = `注文 ${fmtDate(o.orderDate)}` +
+      (o.dueDate ? ` ・ 締切 ${fmtDate(o.dueDate)}` : '') +
+      (o.deliveryDate ? ` ・ 納品 ${fmtDate(o.deliveryDate)}` : '');
+    card.appendChild(dates);
+
+    // 操作
+    const actions = document.createElement('div');
+    actions.className = 'order-actions';
+    if (si < STATUSES.length - 1) {
+      const next = STATUSES[si + 1];
+      const adv = document.createElement('button');
+      adv.className = 'btn-sm primary';
+      adv.textContent = `${next}にする`;
+      adv.addEventListener('click', () => advanceStatus(o.id, next));
+      actions.appendChild(adv);
+    }
+    const edit = document.createElement('button');
+    edit.className = 'btn-sm';
+    edit.textContent = '編集';
+    edit.addEventListener('click', () => startEdit(o.id));
+    actions.appendChild(edit);
+
+    const del = document.createElement('button');
+    del.className = 'btn-sm del';
+    del.textContent = '削除';
+    del.addEventListener('click', () => {
+      if (confirm(`${o.name || 'この注文'} の注文を削除しますか?`)) {
+        orders = orders.filter(x => x.id !== o.id);
+        removeIncomeForOrder(o.id);
+        saveOrders();
+        if (editingId === o.id) cancelEdit();
+        renderAll();
+      }
+    });
+    actions.appendChild(del);
+    card.appendChild(actions);
+
+    list.appendChild(card);
+  }
+}
+
+function advanceStatus(id, next) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  o.status = next;
+  // 「発送済み」にしたとき納品日が空なら今日を入れる
+  if ((next === '発送済み' || next === '完了') && !o.deliveryDate) o.deliveryDate = todayStr();
+  syncIncome(o);
+  saveOrders();
+  renderAll();
+}
+
+/* ===== 追加・編集 ===== */
+function readForm() {
+  let channel = document.getElementById('channel').value;
+  if (channel === '__add__') {
+    const inp = document.getElementById('new-channel');
+    channel = inp.value.trim();
+    if (channel) { addChannel(channel); inp.value = ''; }
+    else channel = '';
+  }
+  return {
+    name: document.getElementById('name').value.trim(),
+    orderDate: document.getElementById('order-date').value,
+    dueDate: document.getElementById('due-date').value,
+    deliveryDate: document.getElementById('delivery-date').value,
+    channel,
+    status: document.getElementById('status').value,
+    content: document.getElementById('content').value.trim(),
+    memo: document.getElementById('memo').value.trim(),
+    price: Number(document.getElementById('price').value) || 0,
+  };
+}
+function clearForm() {
+  document.getElementById('name').value = '';
+  document.getElementById('order-date').value = todayStr();
+  document.getElementById('due-date').value = '';
+  document.getElementById('delivery-date').value = '';
+  document.getElementById('content').value = '';
+  document.getElementById('memo').value = '';
+  document.getElementById('price').value = '';
+  document.getElementById('status').value = STATUSES[0];
+  renderChannelOptions(channels[0]);
+  updateRepeatHint();
+}
+function startEdit(id) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  editingId = id;
+  document.getElementById('name').value = o.name || '';
+  document.getElementById('order-date').value = o.orderDate || todayStr();
+  document.getElementById('due-date').value = o.dueDate || '';
+  document.getElementById('delivery-date').value = o.deliveryDate || '';
+  document.getElementById('content').value = o.content || '';
+  document.getElementById('memo').value = o.memo || '';
+  document.getElementById('price').value = o.price || '';
+  document.getElementById('status').value = o.status || STATUSES[0];
+  if (o.channel && !channels.includes(o.channel)) addChannel(o.channel);
+  renderChannelOptions(o.channel || channels[0]);
+  document.getElementById('form-title').textContent = '注文を編集';
+  document.getElementById('submit-btn').textContent = '更新する';
+  document.getElementById('cancel-edit').classList.remove('hidden');
+  const banner = document.getElementById('editing-banner');
+  banner.textContent = `「${o.name || '注文'}」を編集中`;
+  banner.classList.remove('hidden');
+  updateRepeatHint();
+  document.querySelector('.container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('name').focus();
+}
+function cancelEdit() {
+  editingId = null;
+  document.getElementById('form-title').textContent = '注文を追加';
+  document.getElementById('submit-btn').textContent = '追加する';
+  document.getElementById('cancel-edit').classList.add('hidden');
+  document.getElementById('editing-banner').classList.add('hidden');
+  clearForm();
+}
+
+document.getElementById('form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const data = readForm();
+  if (!data.name) { document.getElementById('name').focus(); return; }
+  if (!data.orderDate) data.orderDate = todayStr();
+  if ((data.status === '発送済み' || data.status === '完了') && !data.deliveryDate) data.deliveryDate = todayStr();
+
+  if (editingId) {
+    const o = orders.find(x => x.id === editingId);
+    if (o) { Object.assign(o, data); syncIncome(o); }
+    cancelEdit();
+  } else {
+    const rec = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      ...data,
+      createdAt: Date.now(),
+    };
+    orders.push(rec);
+    syncIncome(rec);
+    clearForm();
+  }
+  saveOrders();
+  renderAll();
+});
+
+document.getElementById('cancel-edit').addEventListener('click', cancelEdit);
+document.getElementById('channel').addEventListener('change', toggleNewChannelInput);
+document.getElementById('name').addEventListener('input', updateRepeatHint);
+
+document.getElementById('manage-add-btn').addEventListener('click', () => {
+  const input = document.getElementById('manage-input');
+  addChannel(input.value);
+  input.value = '';
+  input.focus();
+});
+document.getElementById('manage-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('manage-add-btn').click(); }
+});
+
+document.getElementById('search').addEventListener('input', (e) => {
+  searchText = e.target.value.trim().toLowerCase();
+  renderList();
+});
+document.getElementById('filter-status').addEventListener('change', (e) => {
+  filterStatus = e.target.value;
+  renderList();
+});
+document.getElementById('sort-by').addEventListener('change', (e) => {
+  sortBy = e.target.value;
+  renderList();
+});
+
+/* ===== CSV ===== */
+function csvField(v) {
+  v = String(v ?? '');
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+const CSV_HEADERS = ['注文日', '名前', '経由', 'ステータス', '希望納期', '納品日', 'オーダー内容', 'メモ', '料金'];
+function buildCsv() {
+  const sorted = [...orders].sort((a, b) => (a.orderDate < b.orderDate ? -1 : 1));
+  const lines = [CSV_HEADERS.join(',')];
+  for (const o of sorted) {
+    lines.push([o.orderDate, o.name, o.channel, o.status, o.dueDate, o.deliveryDate, o.content, o.memo, o.price || '']
+      .map(csvField).join(','));
+  }
+  return '﻿' + lines.join('\r\n');
+}
+function parseCsv(text) {
+  text = text.replace(/^﻿/, '');
+  const rows = [];
+  let row = [], field = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') { q = true; }
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (c !== '\r') { field += c; }
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+function decodeBuffer(buf) {
+  const bytes = new Uint8Array(buf);
+  if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) return new TextDecoder('utf-8').decode(bytes);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch { try { return new TextDecoder('shift_jis').decode(bytes); } catch { return new TextDecoder('utf-8').decode(bytes); } }
+}
+function normalizeDate(s) {
+  const m = String(s || '').trim().match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : '';
+}
+function importCsv(text) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) { alert('取り込めるデータが見つかりませんでした。'); return; }
+  const header = rows[0].map(h => h.trim());
+  const idx = names => header.findIndex(h => names.includes(h));
+  const iName = idx(['名前', 'お名前', 'name']);
+  const iOrder = idx(['注文日', 'date']);
+  if (iName < 0 || iOrder < 0) { alert('「注文日」「名前」の列が見つかりませんでした。'); return; }
+  const iChannel = idx(['経由', '経由先']);
+  const iStatus = idx(['ステータス', '状態']);
+  const iDue = idx(['希望納期', '締切', '納期']);
+  const iDelivery = idx(['納品日', '発送日']);
+  const iContent = idx(['オーダー内容', '内容', 'オーダー']);
+  const iMemo = idx(['メモ', '備考']);
+  const iPrice = idx(['料金', '金額']);
+  const get = (cols, i) => (i >= 0 ? (cols[i] || '').trim() : '');
+
+  const exist = new Set(orders.map(o => `${o.orderDate}|${(o.name || '').trim()}|${o.content || ''}`));
+  const toAdd = [];
+  for (let r = 1; r < rows.length; r++) {
+    const cols = rows[r];
+    const name = get(cols, iName);
+    const orderDate = normalizeDate(cols[iOrder]) || todayStr();
+    if (!name) continue;
+    const content = get(cols, iContent);
+    const key = `${orderDate}|${name}|${content}`;
+    if (exist.has(key)) continue;
+    exist.add(key);
+    let status = get(cols, iStatus);
+    if (!STATUSES.includes(status)) status = STATUSES[0];
+    toAdd.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + r,
+      name, orderDate, content, status,
+      channel: get(cols, iChannel),
+      dueDate: normalizeDate(cols[iDue]),
+      deliveryDate: normalizeDate(cols[iDelivery]),
+      memo: get(cols, iMemo),
+      price: Number((get(cols, iPrice) || '').replace(/[,，¥￥\s]/g, '')) || 0,
+      createdAt: Date.now() + r,
+    });
+  }
+  if (toAdd.length === 0) { alert('新しく取り込める注文はありませんでした(すべて登録済みでした)。'); return; }
+  if (!confirm(`${toAdd.length}件の注文を取り込みます。よろしいですか?`)) return;
+  for (const o of toAdd) {
+    orders.push(o);
+    if (o.channel && !channels.includes(o.channel)) channels.push(o.channel);
+  }
+  saveOrders();
+  saveChannels();
+  renderChannelOptions();
+  renderChips();
+  renderAll();
+  alert(`${toAdd.length}件を取り込みました。`);
+}
+document.getElementById('export-csv').addEventListener('click', () => {
+  const blob = new Blob([buildCsv()], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ネイルオーダー_${todayStr()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+document.getElementById('import-csv').addEventListener('click', () => document.getElementById('import-file').click());
+document.getElementById('import-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => importCsv(decodeBuffer(reader.result));
+  reader.onerror = () => alert('ファイルの読み込みに失敗しました。');
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+});
+
+/* ===== 描画 ===== */
+function renderAll() {
+  renderSummary();
+  renderNameList();
+  renderList();
+}
+
+fillStatusSelect();
+renderChannelOptions(channels[0]);
+renderChips();
+document.getElementById('order-date').value = todayStr();
+document.getElementById('status').value = STATUSES[0];
+renderAll();
+
+// このページは「収入・オーダー管理」アプリ内のiフレームとして読み込まれる前提。
+// 単独で開かれたときだけService Workerを登録する(親アプリのSWと競合させない)。
+if (window.self === window.top && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
